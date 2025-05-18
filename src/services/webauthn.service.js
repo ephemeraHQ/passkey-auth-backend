@@ -12,7 +12,7 @@ const redisService = require('./redis.service');
 class WebAuthnService {
   async generateRegistrationOptions(displayName) {
     const userID = crypto.randomBytes(32);
-    
+
     const options = await generateRegistrationOptions({
       rpName: config.webauthn.rpName,
       rpID: config.webauthn.rpID,
@@ -35,7 +35,7 @@ class WebAuthnService {
       Buffer.from(attestationResponse.response.clientDataJSON, 'base64').toString()
     );
     const challenge = clientDataJSON.challenge;
-    
+
     const storedData = await redisService.getChallenge(challenge);
     if (!storedData) {
       throw new Error('Challenge not found or expired');
@@ -72,6 +72,7 @@ class WebAuthnService {
     return {
       userID,
       credentialID: attestationResponse.id,
+      publicKey: isoBase64URL.fromBuffer(Buffer.from(credentialPublicKey)),
     };
   }
 
@@ -90,7 +91,7 @@ class WebAuthnService {
       Buffer.from(authenticationResponse.response.clientDataJSON, 'base64').toString()
     );
     const challenge = clientDataJSON.challenge;
-    
+
     const storedChallenge = await redisService.getChallenge(challenge);
     if (!storedChallenge || storedChallenge.type !== 'login') {
       throw new Error('Challenge not found - please try logging in again');
@@ -130,8 +131,9 @@ class WebAuthnService {
     return {
       userID: storedCredential.userID,
       credentialID: authenticationResponse.id,
+      publicKey: storedCredential.credentialPublicKey,
     };
   }
 }
 
-module.exports = new WebAuthnService(); 
+module.exports = new WebAuthnService();

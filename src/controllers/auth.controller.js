@@ -8,9 +8,9 @@ class AuthController {
   async getRegistrationChallenge(req, res) {
     try {
       const { displayName } = req.query;
-      
+
       if (!displayName) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'displayName is required as a query parameter',
           receivedParams: req.query,
         });
@@ -27,8 +27,8 @@ class AuthController {
   async registerPasskey(req, res) {
     try {
       const { attestationResponse } = req.body;
-      
-      const { userID, credentialID } = await webauthnService.verifyRegistration(attestationResponse);
+
+      const { userID, credentialID, publicKey } = await webauthnService.verifyRegistration(attestationResponse);
 
       // Generate JWT token using the new service
       const token = await jwtService.sign({
@@ -36,9 +36,11 @@ class AuthController {
         credentialID,
       });
 
-      res.json({ 
+      res.json({
         success: true,
         token,
+        userID,
+        publicKey,
       });
     } catch (error) {
       console.error('Registration error:', error);
@@ -60,7 +62,7 @@ class AuthController {
     try {
       const { authenticationResponse } = req.body;
 
-      const { userID, credentialID } = await webauthnService.verifyAuthentication(authenticationResponse);
+      const { userID, credentialID, publicKey } = await webauthnService.verifyAuthentication(authenticationResponse);
 
       // Generate JWT using the new service
       const token = await jwtService.sign({
@@ -68,9 +70,11 @@ class AuthController {
         credentialID,
       });
 
-      res.json({ 
+      res.json({
         success: true,
         token,
+        userID,
+        publicKey,
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -100,11 +104,11 @@ class AuthController {
           apps: [config.app.appId],
         },
       };
-      
+
       res.set('Content-Type', 'application/json');
       res.set('Cache-Control', 'no-store');
       res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-      
+
       res.json(aasaContent);
     } catch (error) {
       console.error('Error serving AASA file:', error);
@@ -115,7 +119,7 @@ class AuthController {
   async refreshCertificate(req, res) {
     try {
       const { currentCertificate } = req.body;
-      
+
       // Validate the current certificate
       if (!currentCertificate) {
         return res.status(400).json({ error: 'Current certificate is required' });
@@ -123,10 +127,10 @@ class AuthController {
 
       // Get the current server certificate
       const serverCertificate = await this.getServerCertificate();
-      
+
       // Compare certificates
       if (currentCertificate === serverCertificate) {
-        return res.status(200).json({ 
+        return res.status(200).json({
           success: true,
           message: 'Certificate is current',
           certificate: serverCertificate
@@ -157,17 +161,17 @@ class AuthController {
     try {
       // Generate a new certificate
       const certificate = await this.generateNewCertificate();
-      
+
       // Store the certificate hash with a timestamp
       const certificateData = {
         hash: certificate,
         issuedAt: Date.now(),
         expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year validity
       };
-      
+
       // Store in Redis with a specific key for initial certificates
       await redisService.setInitialCertificate(certificateData);
-      
+
       res.json({
         success: true,
         certificate,
@@ -185,9 +189,9 @@ class AuthController {
     const certificate = crypto.createHash('sha256')
       .update(randomBytes)
       .digest('hex');
-    
+
     return certificate;
   }
 }
 
-module.exports = new AuthController(); 
+module.exports = new AuthController();
